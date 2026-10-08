@@ -1,0 +1,10 @@
+{
+  "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
+  "name": "jev-interceptor",
+  "version": "1.0.0",
+  "description": "Triages each submitted prompt through the TypeSafe System One (Jev) API and injects routing guidance as additionalContext.",
+  "author": {
+    "name": "rayo"
+  },
+  "license": "MIT"
+}

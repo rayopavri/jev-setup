@@ -1,0 +1,51 @@
+{
+  "_about": "Every Jev piece on the original Mac. jev-setup.py reads this to install (new Mac), sync (refresh the repo's copies from this Mac), check, and publish (build the public repo). Items marked private are left out of the public repo: they have no licence that allows sharing. Never put a key in this file.",
+  "public_repo": "rayopavri/jev-setup",
+  "private_repo": "rayopavri/jev-interceptor",
+  "copies": [
+    {"name": "jev-browser skill", "repo": "companions/jev-browser", "live": "~/.claude/skills/jev-browser"},
+    {"name": "jev-skill-suggestion plugin", "repo": "companions/jev-skill-suggestion", "live": "~/.claude/skills/jev-skill-suggestion"},
+    {"name": "fast-jev-compaction plugin", "repo": "jev-pack/plugins/fast-jev-compaction", "live": "~/.claude/jev-pack/plugins/fast-jev-compaction"},
+    {"name": "jev skill", "repo": "companions/jev/SKILL.md", "live": "~/.local/share/jev-skill/SKILL.md", "link": {"from": "~/.claude/skills/jev", "to": "~/.local/share/jev-skill"}, "private": true},
+    {"name": "jev command", "repo": "companions/jev/jev.py", "live": "~/.local/bin/jev", "mode": "755", "private": true},
+    {"name": "rule guard hooks", "repo": "jev-pack/hooks", "live": "~/.claude/jev-pack/hooks", "private": true},
+    {"name": "rule guard rules", "repo": "jev-pack/jev-rules.json", "live": "~/.claude/jev-pack/jev-rules.json", "private": true}
+  ],
+  "private_paths": ["companions/jev", "jev-pack/hooks", "jev-pack/jev-rules.json"],
+  "plugins": [
+    {"id": "typesafe@typesafe-ai", "marketplace": "typesafe-ai/skills", "about": "TypeSafe's official skill: how to call Jev well", "link": "https://github.com/typesafe-ai/skills"},
+    {"id": "fast-jev-compaction@fast-jev-compaction", "marketplace": "~/.claude/jev-pack/plugins/fast-jev-compaction", "about": "Compaction by Jev keep/drop decisions", "link": "https://github.com/tamaratran/fast-jev-compaction"},
+    {"id": "jev-belay@jev-belay", "marketplace": "valentynkit/jev-belay", "about": "Blocks an unverified 'done'", "link": "https://github.com/valentynkit/jev-belay",
+     "options": {"threshold": 80, "log": true, "shadow": false}},
+    {"id": "jev-steer-or-queue@jev-steer-or-queue", "marketplace": "Larkspur-Wang/Jev_steer_or_queue", "about": "Steer, queue or interrupt for mid-turn messages", "link": "https://github.com/Larkspur-Wang/Jev_steer_or_queue",
+     "options": {"mode": "active"}},
+    {"id": "compact-adviser@compact-adviser", "marketplace": "kunchenguid/compact-adviser", "about": "Suggests /compact when work looks finished", "link": "https://github.com/kunchenguid/compact-adviser",
+     "options": {"mode": "auto", "logRequests": true, "minContextTokens": 40000}}
+  ],
+  "mcp_servers": [
+    {"name": "jev", "command": ["npx", "-y", "jev-use@0.7.1", "serve"], "about": "Hands steps that need no text output to Jev", "link": "https://github.com/shitianfang/jev-use"},
+    {"name": "jev-browser", "command": ["node", "~/.local/share/jev-browser/bin/jev-browser-mcp.mjs"], "about": "Browser automation decided by Jev", "link": "https://github.com/Ying-Kai-Liao/jev-browser",
+     "clone": {"url": "https://github.com/Ying-Kai-Liao/jev-browser", "dest": "~/.local/share/jev-browser", "after": [["npm", "install", "--silent"], ["npx", "playwright", "install", "chromium"]]}}
+  ],
+  "npm_global": [
+    {"package": "@earendil-works/pi-coding-agent", "about": "pi, which runs ClinePass jobs", "lane": "clinepass"}
+  ],
+  "pi_packages": [
+    {"package": "npm:pi-clinepass-provider", "about": "ClinePass models for pi", "lane": "clinepass"}
+  ],
+  "settings_env": {"CLAUDE_CODE_ENABLE_FUNCTION_HOOKS": "1"},
+  "secret_env": [
+    {"key": "TYPESAFE_API_KEY", "about": "Jev key, from https://console.typesafe.ai/keys"}
+  ],
+  "hooks": [
+    {"event": "PreToolUse", "matcher": "Write|Edit|MultiEdit|Bash", "command": "python3 \"$HOME/.claude/jev-pack/hooks/jev-rules.py\"", "timeout": 10, "needs": "jev-pack/hooks/jev-rules.py", "about": "rule guard", "private": true}
+  ],
+  "claude_md": {"source": "claude-md-snippet.md", "marker": "# Jev routing (all projects)"},
+  "manual_steps": [
+    "ClinePass lane: run `pi /login` (needs a ClinePass plan at app.cline.bot).",
+    "Codex lane: install Codex (https://github.com/openai/codex), then run `codex login`.",
+    "Pay-as-you-go backups (optional): `python3 ~/.claude/skills/jev-interceptor/scripts/set-backup-key.py cline` and/or `... openrouter`.",
+    "jev-skill-suggestion: in Claude Code, set its plugin option typesafeApiKey (or gatewayApiKey).",
+    "Quit Claude Code fully and open it again."
+  ]
+}

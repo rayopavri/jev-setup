@@ -1,0 +1,4 @@
+# backups and caches stay out of the save point
+*.bak*
+__pycache__/
+*.pyc
