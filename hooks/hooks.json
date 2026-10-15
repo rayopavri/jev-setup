@@ -11,6 +11,17 @@
         ]
       }
     ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/jev-review-gate.py\"",
+            "timeout": 25
+          }
+        ]
+      }
+    ],
     "StopFailure": [
       {
         "matcher": "rate_limit|billing_error",
