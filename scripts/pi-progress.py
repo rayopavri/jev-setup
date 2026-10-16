@@ -16,8 +16,9 @@ runs out. Every event pi emits (a token, a step, a tool result) counts as activi
     is CLINE_TOOL_IDLE (default 600), because those are legitimately quiet.
   - ceiling: <limit-seconds> total, sized by the caller from the task -> exit 142.
 
-<model> is a ClinePass model (cline-pass/...) or, on a pay-as-you-go backup, a full
-pi model that names its provider (cline-credits/..., openrouter/...). See cline_pause.py.
+<model> is a ClinePass model (cline-pass/...), the Kimi Code plan (kimi-coding/k3), or,
+on a pay-as-you-go backup, a full pi model that names its provider (cline-credits/...,
+openrouter/...). See cline_pause.py.
 
 Stdout gets pi's final answer, as in text mode, so callers see the same result.
 Stderr gets one line per step. Exit code is pi's, or 142 (ceiling) / 143 (stuck).
@@ -44,6 +45,7 @@ CONTEXT = {
     "cline-pass/kimi-k3": 1_000_000,
     "cline-pass/deepseek-v4.1-flash": 1_000_000,
     "cline-pass/qwen3.7-plus": 1_000_000,
+    "kimi-coding/k3": 1_048_576,
 }
 LABEL = {
     "cline-pass/qwen3.8-max": "Qwen3.8 Max",
@@ -52,6 +54,7 @@ LABEL = {
     "cline-pass/kimi-k3": "Kimi K3",
     "cline-pass/deepseek-v4.1-flash": "DeepSeek V4.1 Flash",
     "cline-pass/qwen3.7-plus": "Qwen3.7 Plus",
+    "kimi-coding/k3": "Kimi K3 · Kimi Code plan",
 }
 # The pay-as-you-go backups' models, named so the status line says which and where.
 for _spec in cline_pause.BACKUPS.values():
@@ -117,6 +120,7 @@ def main() -> int:
     # A ClinePass model goes through the clinepass provider; a backup model already
     # names its own provider (openrouter/...), and its refusals are not ClinePass's.
     on_clinepass = model.startswith("cline-pass/")
+    on_kimi = model.startswith("kimi-coding/")  # the user's Kimi Code plan: its own pause
     pi_model = f"clinepass/{model}" if on_clinepass else model
     try:
         proc = subprocess.Popen(
@@ -180,7 +184,14 @@ def main() -> int:
                         clock["stopped"] = cline_pause.PAUSE_EXIT
                         stop(proc)
                         break
-                    if not on_clinepass and cline_pause.backup_refusal(error):
+                    kimi_kind = cline_pause.kimi_classify(error) if on_kimi else ""
+                    if kimi_kind:
+                        record = cline_pause.kimi_pause(kimi_kind, error)
+                        print(f"  · Kimi Code plan refused: {cline_pause.describe(record)}", file=sys.stderr, flush=True)
+                        clock["stopped"] = cline_pause.PAUSE_EXIT
+                        stop(proc)
+                        break
+                    if not on_clinepass and not on_kimi and cline_pause.backup_refusal(error):
                         label = cline_pause.backup_stop(model, error)
                         print(f"  · {label} refused ({error[:160]}); that backup switched off",
                               file=sys.stderr, flush=True)

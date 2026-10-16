@@ -39,6 +39,7 @@ Without a TypeSafe key, and without an OpenRouter key, the hook does nothing and
 | [ ] | **Node and npm** (install Node with `nvm`) | `pi` is a Node program. The scripts look for `pi` inside `~/.nvm/versions/node/*/bin`. | No ClinePass lane. | nvm: <https://github.com/nvm-sh/nvm> | Nothing to store. |
 | [ ] | **`pi` agent command** | Runs the jobs on ClinePass. | No ClinePass lane. Work stays on Claude or Codex. | npm (Step 5). | Its login is saved in `~/.pi/agent/auth.json`. |
 | [ ] | **ClinePass subscription** (a Cline account at app.cline.bot) | The flat-fee lane for Kimi K3, DeepSeek and others. | The ClinePass lane stays off. | app.cline.bot | Log in once with `pi /login`. |
+| [ ] | **Kimi Code membership** (a Moderato, Allegretto or higher plan at kimi.com/code) | The free first lane for Kimi K3 jobs (1M context from Allegretto up). | Kimi jobs run on ClinePass. | kimi.com/code | Log in once with `pi /login`, then pick Kimi Code. The login lives in `~/.pi/agent/auth.json`. |
 | [ ] | **Codex command and a ChatGPT plan** | The Codex lane (GPT-6-Luna) and the image tool. | No Codex lane, no image route. | OpenAI Codex: <https://github.com/openai/codex>, with your ChatGPT login | Log in with `codex login`. The login lives in `~/.codex/auth.json`. |
 | [ ] | **Cline credits key** | Pay-as-you-go backup 1, used only while ClinePass is at its limit. | No Cline-credits backup. | app.cline.bot, then Settings, then API Keys | `python3 set-backup-key.py cline` saves it in `~/.pi/agent/auth.json`. Or set `CLINE_CREDITS_API_KEY`. |
 | [ ] | **OpenRouter key** | Pay-as-you-go backup 2. Also asks Jev when TypeSafe is down, and powers the "Claude ran out" prompt. | No second backup. No fallback if TypeSafe is down. | openrouter.ai, then Settings, then Keys | `python3 set-backup-key.py openrouter` saves it in `~/.pi/agent/auth.json`. Or set `OPENROUTER_API_KEY`. |
@@ -304,16 +305,23 @@ Risk ≥ 0.70 raises it to Opus; vagueness ≥ 0.70 raises it to at least Sonnet
 
 | Task kind | Lane model |
 |---|---|
-| UI component | Kimi K3 (ClinePass) |
-| Full UI page | Kimi K3 (ClinePass) |
+| UI component | Kimi K3 (Kimi Code plan, then ClinePass) |
+| Full UI page | Kimi K3 (Kimi Code plan, then ClinePass) |
 | Logic and code | GPT-6-Luna (Codex, the ChatGPT plan) |
-| Long session | Kimi K3 (ClinePass) |
+| Long session | Kimi K3 (Kimi Code plan, then ClinePass) |
 | Design (taste, look and feel, critique) | Always Claude |
 | Image | Codex image tool |
 | Other, or Jev under 60% sure | DeepSeek V4 Pro (ClinePass) |
 
 The lanes were re-pointed on 2026-10-05 after a benchmark and price review. Kimi K3
 led the non-Claude models on UI and websites; the Qwen Max models trailed.
+
+On 2026-10-16 the user's own Kimi Code membership (Allegretto) became the first stop for
+Kimi K3 jobs: the same K3 model, flat fee, through pi's built-in `kimi-coding` provider
+(`kimi-coding/k3`). ClinePass's Kimi K3 is next, so ClinePass's 5-hour cap is kept for
+the DeepSeek jobs. When another lane's job fails and Jev's stand-in (Kimi K3) takes a
+try, it also runs on the Kimi Code plan when that is up. The plan has its own pause
+(`kimi-pause.json`): a limit pauses it until the stated reset, a 401 for a day.
 
 ## Small first
 
@@ -380,6 +388,7 @@ All scripts are in `scripts/`.
 | `sh check-setup.sh` | Plain-English health check |
 | `check-tools.sh [model ...]` | Verifies models can read, run and write with tools before they carry work |
 | `python3 cline_pause.py status\|clear` | ClinePass pause state |
+| `python3 cline_pause.py kimi\|kimi clear` | Kimi Code plan lane state, or lift its pause |
 | `python3 cline_pause.py where <model>` | Where a job for that lane model would run right now |
 | `python3 set-backup-key.py cline\|openrouter` | Switches on a pay-as-you-go backup |
 
@@ -401,6 +410,7 @@ All are environment variables. All are optional.
 | `JEV_LANE_MIN` | `0.60` | Below this task-kind confidence, use the default lane |
 | `JEV_CODEX` | `1` | `0` takes the Codex lane out |
 | `JEV_CODEX_MODEL` | `gpt-6-luna` | The Codex lane's model |
+| `JEV_KIMI` | `1` | `0` takes the Kimi Code plan lane out (Kimi jobs go to ClinePass) |
 | `CLINE_DEFAULT_MODEL` | `cline-pass/deepseek-v4-pro` | The worker's model when none is given |
 | `CLINE_FALLBACK_MODEL` | `cline-pass/kimi-k3` | The ClinePass stand-in when a lane fails |
 | `CLINE_TIMEOUT` | `1200` light / `3600` standard | Seconds a worker may run |

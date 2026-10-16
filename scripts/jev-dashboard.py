@@ -55,6 +55,7 @@ MODEL_WORDS = {
     "cline-pass/qwen3.8-max": "Qwen3.8 Max on ClinePass",
     "cline-pass/qwen3.7-max": "Qwen3.7 Max on ClinePass",
     "cline-pass/kimi-k3": "Kimi K3 on ClinePass",
+    "kimi-coding/k3": "Kimi K3 on your Kimi Code plan",
     "cline-pass/deepseek-v4-pro": "DeepSeek V4 Pro on ClinePass",
     "codex/gpt-6-luna": "GPT-6-Luna on your Codex subscription",
 }

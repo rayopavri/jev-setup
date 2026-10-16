@@ -11,7 +11,8 @@ Runs in the current directory, so the lane can read and edit the project's files
 (codex/...). Anything not on the allowlist falls back to the default for the level.
 
 The ladder (see cline_pause.free_steps), small first (the user's rule, 2026-10-05):
-  1. The picked lane, free, if it is up -- its smaller ClinePass sibling first when it
+  1. The picked lane, free, if it is up -- a Kimi K3 job tries the user's Kimi Code
+     plan first, then ClinePass's Kimi K3 -- its smaller ClinePass sibling first when it
      has one (cline_pause.CLINE_SMALL), then the picked model if that fails. Otherwise
      the other free lane may take one more try (a ClinePass job goes to Codex; a Codex
      job to DeepSeek on ClinePass). At most two free attempts that actually fail; a lane
@@ -43,7 +44,7 @@ import cline_pause  # noqa: E402
 # write verified on disk), plus the Codex lane. Add a model only after it passes.
 ALLOWED = {"cline-pass/qwen3.8-max", "cline-pass/qwen3.7-max", "cline-pass/deepseek-v4-pro",
            "cline-pass/deepseek-v4.1-flash", "cline-pass/qwen3.7-plus",
-           "cline-pass/kimi-k3", cline_pause.codex_lane_model()}
+           "cline-pass/kimi-k3", cline_pause.KIMI_LANE, cline_pause.codex_lane_model()}
 DEFAULT_MODEL = os.environ.get("CLINE_DEFAULT_MODEL", "cline-pass/deepseek-v4-pro")
 LOG = os.environ.get("JEV_ROUTING_LOG", os.path.expanduser("~/.config/typesafe/jev-routing.jsonl"))
 FREE_TRIES = 2

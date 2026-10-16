@@ -20,6 +20,8 @@ free lane.
     python3 cline_pause.py clear                # lift it now (e.g. after `pi /login`)
     python3 cline_pause.py codex                # the Codex lane (exit 0 if it can take work)
     python3 cline_pause.py codex clear          # lift a Codex pause now (e.g. after `codex login`)
+    python3 cline_pause.py kimi                 # the Kimi Code lane (exit 0 if it can take work)
+    python3 cline_pause.py kimi clear           # lift a Kimi Code pause now (e.g. after `pi /login`)
     python3 cline_pause.py backup               # the backups (exit 0 if any is on)
     python3 cline_pause.py backup on|off <cline|openrouter>
     python3 cline_pause.py backup order <first> <second>
@@ -138,6 +140,27 @@ CODEX_KINDS = {
 CODEX_IN = re.compile(r"(?:try again|resets?) in\s+(?:(\d+)\s*(?:days?|d)\b[\s,]*)?"
                       r"(?:(\d+)\s*(?:hours?|hrs?|h)\b[\s,]*)?(?:(\d+)\s*(?:minutes?|mins?|m)\b)?", re.I)
 CODEX_AT = re.compile(r"try again at\s+([^.]+)", re.I)
+
+# The Kimi Code lane (added 2026-10-16): the user's own Kimi membership (the Allegretto
+# plan, kimi.com/code), through pi's built-in kimi-coding provider, logged in once with
+# `pi /login` -> Kimi Code. It runs Kimi K3 itself (1M context on Allegretto), so a
+# Kimi job tries it before ClinePass: same model, flat fee, and it leaves ClinePass's
+# 5-hour cap for the DeepSeek jobs. It has its own 5-hour and weekly allowance.
+# A 401 from Kimi Code also means "your plan doesn't cover this", so it pauses for a day.
+KIMI_ON = os.environ.get("JEV_KIMI", "1") != "0"
+KIMI_LANE = "kimi-coding/k3"
+KIMI_FAMILY = "cline-pass/kimi-k3"  # the Jev lane model the Kimi Code plan serves
+KIMI_LABEL = "your Kimi Code plan"
+KIMI_AUTH_KEY = "kimi-coding"  # pi's auth.json entry, written by `pi /login`
+KIMI_PAUSE_FILE = os.path.expanduser("~/.config/typesafe/kimi-pause.json")
+KIMI_KINDS = {
+    "rate_limited": (["429", "rate limit", "too many requests", "usage limit", "quota", "exceeded"],
+                     int(os.environ.get("KIMI_PAUSE_MINUTES", "60")) * 60,
+                     "Kimi Code plan limit reached"),
+    "auth_expired": (["401", "403", "unauthorized", "forbidden", "invalid api key", "token expired",
+                      "invalid_authentication"],
+                     24 * 3600, "Kimi Code login expired or not on the plan (run: pi /login)"),
+}
 
 
 def classify(error_message: str) -> str:
@@ -307,6 +330,76 @@ def codex_status() -> str:
     return f"Codex lane: on ({codex_name()}, on your ChatGPT plan)"
 
 
+def kimi_classify(error_message: str) -> str:
+    """The Kimi Code pause kind for a provider error, or '' for an ordinary failure."""
+    lower = (error_message or "").lower()
+    for kind, (words, _, _) in KIMI_KINDS.items():
+        if any(word in lower for word in words):
+            return kind
+    return ""
+
+
+def kimi_pause(kind: str, detail: str = "") -> dict:
+    _, seconds, reason = KIMI_KINDS[kind]
+    told = codex_reset_seconds(detail) if kind == "rate_limited" else 0
+    if told:
+        seconds = told + RESET_MARGIN
+    record = {"kind": kind, "reason": reason, "detail": detail[:200],
+              "since": time.time(), "until": time.time() + seconds}
+    _write(KIMI_PAUSE_FILE, record)
+    return record
+
+
+def kimi_logged_in() -> bool:
+    try:
+        with open(PI_AUTH, encoding="utf-8") as handle:
+            return KIMI_AUTH_KEY in json.load(handle)
+    except (OSError, ValueError):
+        return False
+
+
+def kimi_active() -> dict:
+    """The current Kimi Code pause, or {} when it is open. An expired pause is removed."""
+    try:
+        with open(KIMI_PAUSE_FILE, encoding="utf-8") as handle:
+            record = json.load(handle)
+    except (OSError, ValueError):
+        return {}
+    expired = float(record.get("until") or 0) <= time.time()
+    try:  # a fresh `pi /login` since the refusal lifts a login pause at once
+        relogged = (record.get("kind") == "auth_expired"
+                    and os.path.getmtime(PI_AUTH) > float(record.get("since") or 0))
+    except OSError:
+        relogged = False
+    if expired or relogged:
+        kimi_clear()
+        return {}
+    return record
+
+
+def kimi_clear() -> None:
+    try:
+        os.remove(KIMI_PAUSE_FILE)
+    except OSError:
+        pass
+
+
+def kimi_ready() -> bool:
+    """The Kimi Code lane can take work: switched on, logged in, not paused."""
+    return KIMI_ON and kimi_logged_in() and not kimi_active()
+
+
+def kimi_status() -> str:
+    if not KIMI_ON:
+        return "Kimi Code lane: off (JEV_KIMI=0)"
+    if not kimi_logged_in():
+        return "Kimi Code lane: not logged in (run: pi /login, then pick Kimi Code)"
+    record = kimi_active()
+    if record:
+        return f"Kimi Code lane: {describe(record)} -- then: python3 {os.path.abspath(__file__)} kimi clear"
+    return "Kimi Code lane: on (Kimi K3, on your Kimi Code plan)"
+
+
 def _state() -> dict:
     try:
         with open(BACKUP_FILE, encoding="utf-8") as handle:
@@ -457,7 +550,7 @@ def backup_status() -> str:
         else:
             lines.append(f"{label}: on ({', '.join(BACKUP_NAME.get(m, m) for m in entry['models'])})")
     order = " -> ".join(BACKUPS[p]["label"] for p in backup_order())
-    return (f"{codex_status()}\n"
+    return (f"{kimi_status()}\n{codex_status()}\n"
             f"Pay-as-you-go backups, used only while a job's own free lane is down, running the "
             f"same model, in this order: {order}\n  " + "\n  ".join(lines))
 
@@ -479,7 +572,8 @@ def status_line(record: dict) -> str:
 
 # ---- Lanes: which free lane takes a job now, and when pay-as-you-go steps in -------
 # Jev picks a lane model: a ClinePass model (cline-pass/...) or the Codex lane
-# (codex/...). The job runs on that lane if it is up. If that lane is down (paused on
+# (codex/...). The job runs on that lane if it is up. A Kimi K3 job tries the Kimi
+# Code plan (kimi-coding/k3) first, then ClinePass's Kimi K3. If that lane is down (paused on
 # a limit or login), the job runs on the SAME model pay-as-you-go -- Cline credits,
 # then OpenRouter -- never on a different or cheaper model (the user's rule). While
 # the lane is up, a run that fails outright may move on to the other free lane once.
@@ -507,9 +601,12 @@ def codex_lane_model() -> str:
 
 
 def paid_family(model: str) -> str:
-    """The BACKUP_TIERS key for a lane model: the Codex lane maps to its GPT family."""
+    """The BACKUP_TIERS key for a lane model: the Codex lane maps to its GPT family,
+    the Kimi Code lane to Kimi K3."""
     if model.startswith("codex/"):
         return "codex/gpt-6-luna"
+    if model.startswith("kimi-coding/"):
+        return KIMI_FAMILY
     return model
 
 
@@ -518,13 +615,21 @@ def free_steps(model: str) -> list[str]:
     Empty when the picked lane itself is down: then the same model goes pay-as-you-go."""
     cline_open = not active()
     codex = codex_lane_model() if codex_ready() else ""
-    if not (codex if model.startswith("codex/") else cline_open):
+    kimi = KIMI_LANE if kimi_ready() else ""
+    if model == KIMI_LANE:
+        model = KIMI_FAMILY
+    own = (kimi or cline_open) if model == KIMI_FAMILY else cline_open
+    if not (codex if model.startswith("codex/") else own):
         return []
     if model.startswith("codex/"):
         steps = [codex, CODEX_PEER if cline_open else ""]
+    elif model == KIMI_FAMILY:
+        steps = [kimi, model if cline_open else "", codex, CODEX_PEER if cline_open else ""]
     else:
         fallback = CLINE_FALLBACK if CLINE_FALLBACK != model else CODEX_PEER
-        steps = [model if cline_open else "", codex, fallback if cline_open else ""]
+        # Jev's stand-in is Kimi K3: on the Kimi Code plan when it is up, else ClinePass.
+        stand_in = kimi if fallback == KIMI_FAMILY and kimi else (fallback if cline_open else "")
+        steps = [model if cline_open else "", codex, stand_in]
     return [step for step in steps if step]
 
 
@@ -532,6 +637,8 @@ def step_label(step: str) -> str:
     """'GPT-6-Luna on your Codex subscription', 'Kimi K3 on ClinePass', 'Qwen3.8 Flash on OpenRouter'."""
     if step.startswith("codex/"):
         return f"{CODEX_NAME.get(step[6:], step[6:])} on {CODEX_LABEL}"
+    if step.startswith("kimi-coding/"):
+        return f"Kimi K3 on {KIMI_LABEL}"
     if step.startswith("cline-pass/"):
         return f"{CLINE_NAME.get(step, step.split('/')[-1])} on ClinePass"
     provider = provider_of(step)
@@ -572,7 +679,7 @@ def lane_paid(model: str) -> bool:
 
 def lanes_down() -> str:
     """'ClinePass usage limit reached -- paused until 12:04 PM; ...' for what is down, or ''."""
-    return "; ".join(describe(r) for r in (active(), codex_active()) if r)
+    return "; ".join(describe(r) for r in (active(), codex_active(), kimi_active()) if r)
 
 
 if __name__ == "__main__":
@@ -587,6 +694,11 @@ if __name__ == "__main__":
             codex_clear()
         print(codex_status())
         sys.exit(0 if codex_ready() else 1)
+    if command == "kimi":  # the Kimi Code lane: status (exit 0 if it can take work), or clear
+        if len(args) > 1 and args[1] == "clear":
+            kimi_clear()
+        print(kimi_status())
+        sys.exit(0 if kimi_ready() else 1)
     if command == "where":  # where a job for <lane model> runs now; exit 1 if only Claude can
         where = lane_where(args[1] if len(args) > 1 else "cline-pass/deepseek-v4-pro", "--escalate" in args)
         print(where or "Claude (every lane that could take it is down)")
